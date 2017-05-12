@@ -1,8 +1,8 @@
 /udacity/*
-/GTI_Far/*
-/GTI_Left/*
-/GTI_MiddleClose/*
-/GTI_Right/*
-/KITTI_extracted/*
+/car_GTI_Far/*
+/car_GTI_Left/*
+/car_GTI_MiddleClose/*
+/car_GTI_Right/*
+/car_KITTI_extracted/*
 /non_car_extras/*
 /non_car_GTI/*
