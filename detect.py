@@ -100,7 +100,9 @@ rand_state = np.random.randint(0, 100)
 X_train, X_test, y_train, y_test = train_test_split(scaled_X, y, test_size = 0.2, random_state = rand_state)
 
 print('Using spatial binning of:', SPATIAL,
-    'and', NBINS,'histogram bins')
+    'and', NBINS,'histogram bins with', ORIENT,
+    'orientations', PIX_PER_CELL, 'pixels per cell and',
+    CELL_PER_BLOCK, 'cells per block')
 print('Feature vector length:', len(X_train[0]))
 # Use a linear SVC
 svc = LinearSVC()
