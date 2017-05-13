@@ -6,7 +6,7 @@ import glob
 import random
 import time
 from skimage.feature import hog
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import LinearSVC
 from scipy.ndimage.measurements import label
@@ -104,19 +104,23 @@ print('Using spatial binning of:', SPATIAL,
     'orientations', PIX_PER_CELL, 'pixels per cell and',
     CELL_PER_BLOCK, 'cells per block')
 print('Feature vector length:', len(X_train[0]))
+# Parameter Tuning
+parameters = {'dual':(True, False), 'C':[0.1, 1.0, 10]}
 # Use a linear SVC
 svc = LinearSVC()
+# Run Grid Search
+clf = GridSearchCV(svc, parameters)
 # Check the training time for the SVC
 t=time.time()
-svc.fit(X_train, y_train)
+clf.fit(X_train, y_train)
 t2 = time.time()
 print(round(t2-t, 2), 'Seconds to train SVC...')
 # Check the score of the SVC
-print('Test Accuracy of SVC = ', round(svc.score(X_test, y_test), 4))
+print('Test Accuracy of SVC = ', round(clf.score(X_test, y_test), 4))
 # Check the prediction time for a single sample
 t=time.time()
 n_predict = 10
-print('My SVC predicts: ', svc.predict(X_test[0:n_predict]))
+print('My SVC predicts: ', clf.predict(X_test[0:n_predict]))
 print('For these',n_predict, 'labels: ', y_test[0:n_predict])
 t2 = time.time()
 print(round(t2-t, 5), 'Seconds to predict', n_predict,'labels with SVC')
