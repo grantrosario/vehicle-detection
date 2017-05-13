@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import glob
 import random
+import time
 from skimage.feature import hog
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
@@ -14,6 +15,7 @@ from scipy.ndimage.measurements import label
 # Constants
 #---------------------
 NBINS = 32
+SPATIAL = 32
 COLOR_SPACE = 'RGB'
 VIS_HOG = False
 FEATURE_VECTOR = True
@@ -68,7 +70,7 @@ def extract_features(imgs, color_space = COLOR_SPACE, orient = ORIENT, pix_per_c
             elif color_space == 'YCrCb':
                 feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2YCrCb)
         else: feature_image = np.copy(image)
-        spatial_features = bin_spatial(feature_image, (32, 32))
+        spatial_features = bin_spatial(feature_image, (SPATIAL, SPATIAL))
         color_features = color_hist(feature_image, NBINS, (0, 256))
         # Call get_hog_features() with vis=False, feature_vec=True
         if hog_channel == 'ALL':
@@ -85,9 +87,37 @@ def extract_features(imgs, color_space = COLOR_SPACE, orient = ORIENT, pix_per_c
     return features
 
 
-car_features = extract_features(cars, COLOR_SPACE, ORIENT, PIX_PER_CELL, CELL_PER_BLOCK, HOG_CHANNEL))
-notcar_features = extract_features(notcars, COLOR_SPACE, ORIENT, PIX_PER_CELL, CELL_PER_BLOCK, HOG_CHANNEL))
+car_features = extract_features(cars, COLOR_SPACE, ORIENT, PIX_PER_CELL, CELL_PER_BLOCK, HOG_CHANNEL)
+notcar_features = extract_features(notcars, COLOR_SPACE, ORIENT, PIX_PER_CELL, CELL_PER_BLOCK, HOG_CHANNEL)
 
+X = np.vstack((car_features, notcar_features)).astype(np.float64)
+X_scaler = StandardScaler().fit(X)
+scaled_X = X_scaler.transform(X)
+
+y = np.hstack((np.ones(len(car_features)), np.zeros(len(notcar_features))))
+
+rand_state = np.random.randint(0, 100)
+X_train, X_test, y_train, y_test = train_test_split(scaled_X, y, test_size = 0.2, random_state = rand_state)
+
+print('Using spatial binning of:', SPATIAL,
+    'and', NBINS,'histogram bins')
+print('Feature vector length:', len(X_train[0]))
+# Use a linear SVC
+svc = LinearSVC()
+# Check the training time for the SVC
+t=time.time()
+svc.fit(X_train, y_train)
+t2 = time.time()
+print(round(t2-t, 2), 'Seconds to train SVC...')
+# Check the score of the SVC
+print('Test Accuracy of SVC = ', round(svc.score(X_test, y_test), 4))
+# Check the prediction time for a single sample
+t=time.time()
+n_predict = 10
+print('My SVC predicts: ', svc.predict(X_test[0:n_predict]))
+print('For these',n_predict, 'labels: ', y_test[0:n_predict])
+t2 = time.time()
+print(round(t2-t, 5), 'Seconds to predict', n_predict,'labels with SVC')
 
 # ind = np.random.randint(0, len(cars))
 #
