@@ -25,11 +25,63 @@ CELL_PER_BLOCK = 2
 HOG_CHANNEL = 0
 WIND_SIZE = 64
 WIND_OVERLAP = 0.5
+SPATIAL_FEAT = True
+HIST_FEAT = True
+HOG_FEAT = True
+USE_SAMPLE = False
+SAMPLE_SIZE = 100
 
 #---------------------
 
 cars = glob.glob('car*/*.png')
 notcars = glob.glob('non_car*/*.png')
+
+def single_img_features(img, color_space=COLOR_SPACE, spatial_size=(SPATIAL, SPATIAL),
+                        hist_bins=NBINS, orient=ORIENT,
+                        pix_per_cell=PIX_PER_CELL, cell_per_block=CELL_PER_BLOCK, hog_channel=HOG_CHANNEL,
+                        spatial_feat=SPATIAL_FEAT, hist_feat=HIST_FEAT, hog_feat=HOG_FEAT):
+    #1) Define an empty list to receive features
+    img_features = []
+    #2) Apply color conversion if other than 'RGB'
+    if color_space != 'RGB':
+        if color_space == 'HSV':
+            feature_image = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
+        elif color_space == 'LUV':
+            feature_image = cv2.cvtColor(img, cv2.COLOR_RGB2LUV)
+        elif color_space == 'HLS':
+            feature_image = cv2.cvtColor(img, cv2.COLOR_RGB2HLS)
+        elif color_space == 'YUV':
+            feature_image = cv2.cvtColor(img, cv2.COLOR_RGB2YUV)
+        elif color_space == 'YCrCb':
+            feature_image = cv2.cvtColor(img, cv2.COLOR_RGB2YCrCb)
+    else: feature_image = np.copy(img)
+    #3) Compute spatial features if flag is set
+    if spatial_feat == True:
+        spatial_features = bin_spatial(feature_image, size=(SPATIAL, SPATIAL))
+        #4) Append features to list
+        img_features.append(spatial_features)
+    #5) Compute histogram features if flag is set
+    if hist_feat == True:
+        hist_features = color_hist(feature_image, nbins=NBINS)
+        #6) Append features to list
+        img_features.append(hist_features)
+    #7) Compute HOG features if flag is set
+    if hog_feat == True:
+        if hog_channel == 'ALL':
+            hog_features = []
+            for channel in range(feature_image.shape[2]):
+                hog_features.extend(get_hog_features(feature_image[:,:,channel],
+                                    ORIENT, PIX_PER_CELL, CELL_PER_BLOCK,
+                                    VIS_HOG, FEATURE_VECTOR))
+        else:
+            hog_features = get_hog_features(feature_image[:,:,hog_channel], ORIENT,
+                        PIX_PER_CELL, CELL_PER_BLOCK, VIS_HOG, FEATURE_VECTOR)
+        #8) Append features to list
+        img_features.append(hog_features)
+
+    #9) Return concatenated array of features
+    return np.concatenate(img_features)
+
 
 def color_hist(img, nbins, bins_range = (0,256)):
     channel1_hist = np.histogram(img[:,:,0], bins = nbins, range = bins_range)
@@ -128,13 +180,39 @@ def draw_boxes(img, bboxes, color = (0, 0, 255), thick = 6):
         cv2.rectangle(imcopy, bbox[0], bbox[1], color, thick)
     return imcopy
 
-image = mpimg.imread('test_images/test1.jpg')
-windows = slide_window(image, x_start_stop = [None, None], y_start_stop = [350, None],
-                       xy_window = (WIND_SIZE, WIND_SIZE), xy_overlap = (WIND_OVERLAP, WIND_OVERLAP))
+def search_windows(img, windows, clf, scaler, color_space=COLOR_SPACE,
+                    spatial_size=(SPATIAL, SPATIAL), hist_bins=NBINS,
+                    hist_range=(0, 256), orient=ORIENT,
+                    pix_per_cell=PIX_PER_CELL, cell_per_block=CELL_PER_BLOCK,
+                    hog_channel=HOG_CHANNEL, spatial_feat=SPATIAL_FEAT,
+                    hist_feat=HIST_FEAT, hog_feat=HOG_FEAT):
 
-window_img = draw_boxes(image, windows, color = (255, 0, 0), thick = 3)
-plt.imshow(window_img)
-plt.show()
+    #1) Create an empty list to receive positive detection windows
+    on_windows = []
+    #2) Iterate over all windows in the list
+    for window in windows:
+        #3) Extract the test window from original image
+        test_img = cv2.resize(img[window[0][1]:window[1][1], window[0][0]:window[1][0]], (64, 64))
+        #4) Extract features for that window using single_img_features()
+        features = single_img_features(test_img, color_space=COLOR_SPACE,
+                            spatial_size=SPATIAL, hist_bins=NBINS,
+                            orient=ORIENT, pix_per_cell=PIX_PER_CELL,
+                            cell_per_block=CELL_PER_BLOCK,
+                            hog_channel=HOG_CHANNEL, spatial_feat=SPATIAL_FEAT,
+                            hist_feat=HIST_FEAT, hog_feat=HOG_FEAT)
+        #5) Scale extracted features to be fed to classifier
+        test_features = scaler.transform(np.array(features).reshape(1, -1))
+        #6) Predict using your classifier
+        prediction = clf.predict(test_features)
+        #7) If positive (prediction == 1) then save the window
+        if prediction == 1:
+            on_windows.append(window)
+    #8) Return windows for positive detections
+    return on_windows
+
+if USE_SAMPLE == True:
+    cars = cars[0:SAMPLE_SIZE]
+    notcars = notcars[0:SAMPLE_SIZE]
 
 car_features = extract_features(cars, COLOR_SPACE, ORIENT, PIX_PER_CELL, CELL_PER_BLOCK, HOG_CHANNEL)
 notcar_features = extract_features(notcars, COLOR_SPACE, ORIENT, PIX_PER_CELL, CELL_PER_BLOCK, HOG_CHANNEL)
@@ -173,6 +251,24 @@ print('My SVC predicts: ', clf.predict(X_test[0:n_predict]))
 print('For these',n_predict, 'labels: ', y_test[0:n_predict])
 t2 = time.time()
 print(round(t2-t, 5), 'Seconds to predict', n_predict,'labels with SVC')
+
+image = mpimg.imread('test_images/test1.jpg')
+draw_img = np.copy(image)
+
+windows = slide_window(image, x_start_stop=[None, None], y_start_stop=[350, None],
+                       xy_window=(WIND_SIZE, WIND_SIZE), xy_overlap=(WIND_OVERLAP, WIND_OVERLAP))
+
+hot_windows = search_windows(image, windows, clf, X_scaler, color_space=COLOR_SPACE,
+                        spatial_size=SPATIAL, hist_bins=NBINS,
+                        orient=ORIENT, pix_per_cell=PIX_PER_CELL,
+                        cell_per_block=CELL_PER_BLOCK,
+                        hog_channel=HOG_CHANNEL, spatial_feat=SPATIAL_FEAT,
+                        hist_feat=HIST_FEAT, hog_feat=HOG_FEAT)
+
+window_img = draw_boxes(draw_img, hot_windows, color=(0, 0, 255), thick=3)
+
+plt.imshow(window_img)
+plt.show()
 
 # ind = np.random.randint(0, len(cars))
 #
