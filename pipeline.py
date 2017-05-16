@@ -43,14 +43,28 @@ t2 = time.time()
 print(round(t2-t, 5), 'Seconds to predict', n_predict,'labels with SVC')
 
 image = mpimg.imread('test_images/test1.jpg')
+heat = np.zeros_like(image[:,:,0]).astype(np.float)
 
 ystart = 350
 ystop = None
 scale = 1.5
 
-out_img = find_cars(image, ystart, ystop, scale, clf, X_scaler)
+out_img, box_list = find_cars(image, ystart, ystop, scale, clf, X_scaler)
 
-plt.imshow(out_img)
+heat = add_heat(heat, box_list)
+heat = apply_threshold(heat, 1)
+heatmap = np.clip(heat, 0, 255)
+labels = label(heatmap)
+draw_img = draw_labeled_bboxes(np.copy(image), labels)
+
+fig = plt.figure()
+plt.subplot(121)
+plt.imshow(draw_img)
+plt.title('Car Positions')
+plt.subplot(122)
+plt.imshow(heatmap, cmap='hot')
+plt.title('Heat Map')
+fig.tight_layout()
 plt.show()
 
 # ind = np.random.randint(0, len(cars))

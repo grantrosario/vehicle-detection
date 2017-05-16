@@ -28,7 +28,7 @@ WIND_OVERLAP = 0.5
 SPATIAL_FEAT = False
 HIST_FEAT = False
 HOG_FEAT = True
-USE_SAMPLE = True
+USE_SAMPLE = False
 SAMPLE_SIZE = 500
 SCALE = 1.5
 CELLS_PER_STEP = 2
@@ -231,7 +231,8 @@ def convert_color(img, conv='RGB2YCrCb'):
 def find_cars(img, ystart, ystop, scale, svc, X_scaler):
 
     draw_img = np.copy(img)
-    #img = img.astype(np.float32)/255
+    img = img.astype(np.float32)/255
+    box_list = []
 
     img_tosearch = img[ystart:ystop,:,:]
     ctrans_tosearch = convert_color(img_tosearch, conv='RGB2YCrCb')
@@ -289,13 +290,45 @@ def find_cars(img, ystart, ystop, scale, svc, X_scaler):
 
             # Scale features and make a prediction
             test_features = X_scaler.transform(np.hstack((features)).reshape(1, -1))
-            #test_features = X_scaler.transform(np.hstack((shape_feat, hist_feat)).reshape(1, -1))
             test_prediction = svc.predict(test_features)
 
             if test_prediction == 1:
                 xbox_left = np.int(xleft*scale)
                 ytop_draw = np.int(ytop*scale)
-                win_draw = np.int(window*scale)
+                win_draw = np.int(WIND_SIZE*scale)
+                box = (xbox_left, ytop_draw+ystart), (xbox_left+win_draw, ytop_draw+win_draw+ystart)
+                box_list.append(box)
                 cv2.rectangle(draw_img,(xbox_left, ytop_draw+ystart),(xbox_left+win_draw,ytop_draw+win_draw+ystart),(0,0,255),6)
 
-    return draw_img
+    return draw_img, box_list
+
+def add_heat(heatmap, bbox_list):
+    # Iterate through list of bboxes
+    for box in bbox_list:
+        # Add += 1 for all pixels inside each bbox
+        # Assuming each "box" takes the form ((x1, y1), (x2, y2))
+        heatmap[box[0][1]:box[1][1], box[0][0]:box[1][0]] += 1
+
+    # Return updated heatmap
+    return heatmap# Iterate through list of bboxes
+
+def apply_threshold(heatmap, threshold):
+    # Zero out pixels below the threshold
+    heatmap[heatmap <= threshold] = 0
+    # Return thresholded map
+    return heatmap
+
+def draw_labeled_bboxes(img, labels):
+    # Iterate through all detected cars
+    for car_number in range(1, labels[1]+1):
+        # Find pixels with each car_number label value
+        nonzero = (labels[0] == car_number).nonzero()
+        # Identify x and y values of those pixels
+        nonzeroy = np.array(nonzero[0])
+        nonzerox = np.array(nonzero[1])
+        # Define a bounding box based on min/max x and y
+        bbox = ((np.min(nonzerox), np.min(nonzeroy)), (np.max(nonzerox), np.max(nonzeroy)))
+        # Draw the box on the image
+        cv2.rectangle(img, bbox[0], bbox[1], (0,0,255), 6)
+    # Return the image
+    return img
